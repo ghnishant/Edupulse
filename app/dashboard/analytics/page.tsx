@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -40,7 +40,6 @@ import {
   TrendingUp,
   TrendingDown,
   Download,
-  Filter,
   Calendar,
   Users,
   GraduationCap,
@@ -48,59 +47,10 @@ import {
   Award,
   Target,
   Building,
+  Loader2,
 } from "lucide-react"
-
-const yearlyData = [
-  { year: "2020", students: 3800, faculty: 180, research: 65, placements: 72 },
-  { year: "2021", students: 4200, faculty: 200, research: 78, placements: 75 },
-  { year: "2022", students: 4600, faculty: 220, research: 92, placements: 78 },
-  { year: "2023", students: 4900, faculty: 235, research: 112, placements: 82 },
-  { year: "2024", students: 5120, faculty: 240, research: 135, placements: 85 },
-]
-
-const departmentComparison = [
-  { dept: "CSE", students: 850, faculty: 45, ratio: 18.9, research: 45, placements: 92 },
-  { dept: "ECE", students: 720, faculty: 38, ratio: 18.9, research: 32, placements: 88 },
-  { dept: "ME", students: 680, faculty: 35, ratio: 19.4, research: 28, placements: 82 },
-  { dept: "CE", students: 550, faculty: 28, ratio: 19.6, research: 22, placements: 78 },
-  { dept: "EE", students: 620, faculty: 32, ratio: 19.4, research: 25, placements: 85 },
-]
-
-const naacCriteria = [
-  { criteria: "Curricular Aspects", score: 85, weight: 100 },
-  { criteria: "Teaching-Learning", score: 88, weight: 200 },
-  { criteria: "Research & Extension", score: 82, weight: 250 },
-  { criteria: "Infrastructure", score: 78, weight: 100 },
-  { criteria: "Student Support", score: 84, weight: 100 },
-  { criteria: "Governance", score: 80, weight: 100 },
-  { criteria: "Innovation", score: 75, weight: 150 },
-]
-
-const monthlyTrends = [
-  { month: "Jul", admissions: 850, queries: 1200, placements: 45 },
-  { month: "Aug", admissions: 320, queries: 800, placements: 62 },
-  { month: "Sep", admissions: 120, queries: 600, placements: 78 },
-  { month: "Oct", admissions: 50, queries: 400, placements: 95 },
-  { month: "Nov", admissions: 30, queries: 350, placements: 120 },
-  { month: "Dec", admissions: 20, queries: 300, placements: 145 },
-  { month: "Jan", admissions: 15, queries: 450, placements: 180 },
-]
-
-const researchDist = [
-  { name: "Journals", value: 45, color: "oklch(0.55 0.2 240)" },
-  { name: "Conferences", value: 30, color: "oklch(0.65 0.18 195)" },
-  { name: "Patents", value: 15, color: "oklch(0.65 0.18 145)" },
-  { name: "Books", value: 10, color: "oklch(0.75 0.18 85)" },
-]
-
-const kpiData = [
-  { label: "Student Enrollment", value: "5,120", change: "+12%", trend: "up", icon: Users, color: "text-primary" },
-  { label: "Faculty Count", value: "240", change: "+8%", trend: "up", icon: GraduationCap, color: "text-accent" },
-  { label: "Research Output", value: "156", change: "+23%", trend: "up", icon: BookOpen, color: "text-success" },
-  { label: "Placement Rate", value: "85%", change: "+3%", trend: "up", icon: Target, color: "text-warning" },
-  { label: "NAAC Score", value: "3.42", change: "+0.15", trend: "up", icon: Award, color: "text-info" },
-  { label: "Departments", value: "12", change: "0", trend: "neutral", icon: Building, color: "text-muted-foreground" },
-]
+import { useAnalyticsData } from "@/hooks/use-analytics-data"
+import { useDashboardStats } from "@/hooks/use-dashboard-stats"
 
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name: string; color: string }>; label?: string }) => {
   if (active && payload && payload.length) {
@@ -120,11 +70,34 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState("5years")
-  const [department, setDepartment] = useState("all")
+  const [mounted, setMounted] = useState(false)
+  const { yearly, performance, departments, placement, research, monthly, loading } = useAnalyticsData()
+  const stats = useDashboardStats()
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const kpiData = [
+    { label: "Total Students", value: mounted ? stats.totalStudents.toLocaleString() : "", icon: Users, color: "text-primary" },
+    { label: "Faculty Count", value: mounted ? stats.facultyMembers.toLocaleString() : "", icon: GraduationCap, color: "text-accent" },
+    { label: "Research Papers", value: mounted ? stats.researchPapers.toLocaleString() : "", icon: BookOpen, color: "text-success" },
+    { label: "Placement Rate", value: mounted ? "88%" : "", icon: Target, color: "text-warning" },
+    { label: "NAAC Score", value: mounted ? stats.naacScore.toString() : "", icon: Award, color: "text-info" },
+    { label: "Departments", value: mounted ? stats.departments.toString() : "", icon: Building, color: "text-muted-foreground" },
+  ]
+
+  if (loading || stats.loading) {
+// ... existing loading logic ...
+    return (
+      <div className="flex items-center justify-center h-[600px]">
+        <Loader2 className="w-12 h-12 animate-spin text-primary" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -157,7 +130,6 @@ export default function AnalyticsPage() {
         </div>
       </motion.div>
 
-      {/* KPI Cards */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -169,16 +141,6 @@ export default function AnalyticsPage() {
             <CardContent className="pt-4 pb-4">
               <div className="flex items-start justify-between mb-2">
                 <kpi.icon className={`w-5 h-5 ${kpi.color}`} />
-                {kpi.trend !== "neutral" && (
-                  <Badge variant="secondary" className="text-xs gap-1">
-                    {kpi.trend === "up" ? (
-                      <TrendingUp className="w-3 h-3 text-success" />
-                    ) : (
-                      <TrendingDown className="w-3 h-3 text-destructive" />
-                    )}
-                    {kpi.change}
-                  </Badge>
-                )}
               </div>
               <p className="text-2xl font-bold">{kpi.value}</p>
               <p className="text-xs text-muted-foreground mt-1">{kpi.label}</p>
@@ -187,9 +149,7 @@ export default function AnalyticsPage() {
         ))}
       </motion.div>
 
-      {/* Main Charts */}
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Growth Trends */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -210,7 +170,7 @@ export default function AnalyticsPage() {
                 <TabsContent value="enrollment">
                   <div className="h-[300px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={yearlyData}>
+                      <ComposedChart data={yearly}>
                         <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                         <XAxis dataKey="year" tick={{ fill: 'oklch(0.5 0.02 250)', fontSize: 11 }} />
                         <YAxis yAxisId="left" tick={{ fill: 'oklch(0.5 0.02 250)', fontSize: 11 }} />
@@ -218,7 +178,7 @@ export default function AnalyticsPage() {
                         <Tooltip content={<CustomTooltip />} />
                         <Legend />
                         <Bar yAxisId="left" dataKey="students" name="Students" fill="oklch(0.55 0.2 240)" radius={[4, 4, 0, 0]} />
-                        <Line yAxisId="right" type="monotone" dataKey="faculty" name="Faculty" stroke="oklch(0.65 0.18 195)" strokeWidth={2} />
+                        <Line yAxisId="right" type="monotone" dataKey="research" name="Research" stroke="oklch(0.65 0.18 195)" strokeWidth={2} />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
@@ -226,7 +186,7 @@ export default function AnalyticsPage() {
                 <TabsContent value="research">
                   <div className="h-[300px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={yearlyData}>
+                      <AreaChart data={yearly}>
                         <defs>
                           <linearGradient id="colorResearch" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="oklch(0.65 0.18 145)" stopOpacity={0.3} />
@@ -245,7 +205,7 @@ export default function AnalyticsPage() {
                 <TabsContent value="placements">
                   <div className="h-[300px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={yearlyData}>
+                      <LineChart data={yearly}>
                         <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                         <XAxis dataKey="year" tick={{ fill: 'oklch(0.5 0.02 250)', fontSize: 11 }} />
                         <YAxis domain={[0, 100]} tick={{ fill: 'oklch(0.5 0.02 250)', fontSize: 11 }} />
@@ -260,7 +220,6 @@ export default function AnalyticsPage() {
           </Card>
         </motion.div>
 
-        {/* NAAC Criteria Performance */}
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -274,9 +233,9 @@ export default function AnalyticsPage() {
             <CardContent>
               <div className="h-[350px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart cx="50%" cy="50%" outerRadius="70%" data={naacCriteria}>
+                  <RadarChart cx="50%" cy="50%" outerRadius="70%" data={performance}>
                     <PolarGrid className="stroke-border" />
-                    <PolarAngleAxis dataKey="criteria" tick={{ fontSize: 10, fill: 'oklch(0.5 0.02 250)' }} />
+                    <PolarAngleAxis dataKey="name" tick={{ fontSize: 10, fill: 'oklch(0.5 0.02 250)' }} />
                     <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 10, fill: 'oklch(0.5 0.02 250)' }} />
                     <Radar name="Score" dataKey="score" stroke="oklch(0.55 0.2 240)" fill="oklch(0.55 0.2 240)" fillOpacity={0.3} strokeWidth={2} />
                     <Tooltip content={<CustomTooltip />} />
@@ -288,7 +247,6 @@ export default function AnalyticsPage() {
         </motion.div>
       </div>
 
-      {/* Department Comparison & Research Distribution */}
       <div className="grid lg:grid-cols-3 gap-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -304,14 +262,14 @@ export default function AnalyticsPage() {
             <CardContent>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={departmentComparison}>
+                  <BarChart data={departments}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="dept" tick={{ fill: 'oklch(0.5 0.02 250)', fontSize: 11 }} />
                     <YAxis tick={{ fill: 'oklch(0.5 0.02 250)', fontSize: 11 }} />
                     <Tooltip content={<CustomTooltip />} />
                     <Legend />
-                    <Bar dataKey="research" name="Research" fill="oklch(0.55 0.2 240)" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="placements" name="Placements %" fill="oklch(0.65 0.18 195)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="students" name="Students" fill="oklch(0.55 0.2 240)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="faculty" name="Faculty" fill="oklch(0.65 0.18 195)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -326,15 +284,15 @@ export default function AnalyticsPage() {
         >
           <Card className="glass h-full">
             <CardHeader>
-              <CardTitle>Research Distribution</CardTitle>
-              <CardDescription>Publication types breakdown</CardDescription>
+              <CardTitle>Outcome Distribution</CardTitle>
+              <CardDescription>Graduate outcomes breakdown</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-[260px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={researchDist}
+                      data={placement}
                       cx="50%"
                       cy="50%"
                       innerRadius={50}
@@ -342,7 +300,7 @@ export default function AnalyticsPage() {
                       paddingAngle={2}
                       dataKey="value"
                     >
-                      {researchDist.map((entry, index) => (
+                      {placement.map((entry: any, index: number) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
@@ -356,7 +314,6 @@ export default function AnalyticsPage() {
         </motion.div>
       </div>
 
-      {/* Monthly Trends */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -365,20 +322,18 @@ export default function AnalyticsPage() {
         <Card className="glass">
           <CardHeader>
             <CardTitle>Monthly Activity Trends</CardTitle>
-            <CardDescription>Admissions, queries, and placement activities</CardDescription>
+            <CardDescription>Student enrollment and research query activities</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={monthlyTrends}>
+                <LineChart data={monthly}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis dataKey="month" tick={{ fill: 'oklch(0.5 0.02 250)', fontSize: 11 }} />
                   <YAxis tick={{ fill: 'oklch(0.5 0.02 250)', fontSize: 11 }} />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend />
-                  <Line type="monotone" dataKey="admissions" name="Admissions" stroke="oklch(0.55 0.2 240)" strokeWidth={2} />
-                  <Line type="monotone" dataKey="queries" name="Queries" stroke="oklch(0.65 0.18 195)" strokeWidth={2} />
-                  <Line type="monotone" dataKey="placements" name="Placements" stroke="oklch(0.65 0.18 145)" strokeWidth={2} />
+                  <Line type="monotone" dataKey="students" name="Students" stroke="oklch(0.55 0.2 240)" strokeWidth={2} />
                 </LineChart>
               </ResponsiveContainer>
             </div>

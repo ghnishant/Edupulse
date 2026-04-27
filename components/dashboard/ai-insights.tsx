@@ -6,81 +6,74 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { 
   Sparkles, 
-  TrendingUp, 
   AlertTriangle, 
   CheckCircle2, 
   ArrowRight,
   Lightbulb,
-  Target
+  Target,
+  Loader2
 } from "lucide-react"
 import Link from "next/link"
-
-const insights = [
-  {
-    type: "success",
-    icon: CheckCircle2,
-    title: "Research Output Up 23%",
-    description: "Your institution has published 36 more papers compared to last year. Computer Science department leads with 45 publications.",
-    action: "View Details",
-    href: "/dashboard/analytics",
-  },
-  {
-    type: "warning",
-    icon: AlertTriangle,
-    title: "Faculty-Student Ratio Alert",
-    description: "Electronics department has a ratio of 1:22, which is below the recommended 1:15 for NAAC A++ grade.",
-    action: "Take Action",
-    href: "/dashboard/departments",
-  },
-  {
-    type: "info",
-    icon: Lightbulb,
-    title: "NAAC Recommendation",
-    description: "To improve your infrastructure score, consider adding 3 more smart classrooms and 1 research lab by next quarter.",
-    action: "View Plan",
-    href: "/dashboard/reports",
-  },
-  {
-    type: "target",
-    icon: Target,
-    title: "Placement Target On Track",
-    description: "78% placement rate achieved. Need 22 more placements to reach the 85% target for this academic year.",
-    action: "View Stats",
-    href: "/dashboard/analytics",
-  },
-]
-
-const getTypeStyles = (type: string) => {
-  switch (type) {
-    case "success":
-      return "border-success/30 bg-success/5"
-    case "warning":
-      return "border-warning/30 bg-warning/5"
-    case "info":
-      return "border-info/30 bg-info/5"
-    case "target":
-      return "border-primary/30 bg-primary/5"
-    default:
-      return "border-border"
-  }
-}
-
-const getIconStyles = (type: string) => {
-  switch (type) {
-    case "success":
-      return "text-success"
-    case "warning":
-      return "text-warning"
-    case "info":
-      return "text-info"
-    case "target":
-      return "text-primary"
-    default:
-      return "text-muted-foreground"
-  }
-}
+import { useDashboardStats } from "@/hooks/use-dashboard-stats"
 
 export function AIInsights() {
+  const { totalStudents, facultyMembers, researchPapers, naacScore, loading } = useDashboardStats()
+
+  if (loading) {
+    return (
+      <Card className="glass">
+        <CardContent className="flex items-center justify-center h-48">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const insights = [
+    {
+      type: "success",
+      icon: CheckCircle2,
+      title: `Research Output: ${researchPapers} Papers`,
+      description: `Your institution has a strong research focus with ${researchPapers} published works. Keep it up!`,
+      action: "View Analytics",
+      href: "/dashboard/analytics",
+    },
+    {
+      type: "warning",
+      icon: AlertTriangle,
+      title: "Faculty-Student Ratio",
+      description: `Current ratio is 1:${Math.round(totalStudents/facultyMembers) || 0}. Recommended for NAAC A++ is 1:15.`,
+      action: "Review Departments",
+      href: "/dashboard/analytics",
+    },
+    {
+      type: "info",
+      icon: Lightbulb,
+      title: "NAAC Score Insight",
+      description: `Your current score is ${naacScore}. Improving infrastructure documentation could push this above 3.5.`,
+      action: "View Reports",
+      href: "/dashboard/reports",
+    },
+  ]
+
+  const getTypeStyles = (type: string) => {
+    switch (type) {
+      case "success": return "border-success/30 bg-success/5"
+      case "warning": return "border-warning/30 bg-warning/5"
+      case "info": return "border-info/30 bg-info/5"
+      default: return "border-border"
+    }
+  }
+
+  const getIconStyles = (type: string) => {
+    switch (type) {
+      case "success": return "text-success"
+      case "warning": return "text-warning"
+      case "info": return "text-info"
+      default: return "text-muted-foreground"
+    }
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -96,14 +89,10 @@ export function AIInsights() {
             <div>
               <CardTitle>AI Insights</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Personalized recommendations based on your data
+                Recommendations based on your live data
               </p>
             </div>
           </div>
-          <Badge variant="secondary" className="gap-1">
-            <TrendingUp className="w-3 h-3" />
-            4 New
-          </Badge>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4">
@@ -139,15 +128,6 @@ export function AIInsights() {
                 </div>
               </motion.div>
             ))}
-          </div>
-
-          <div className="mt-4 pt-4 border-t border-border">
-            <Button asChild variant="outline" className="w-full">
-              <Link href="/dashboard/ai-assistant">
-                <Sparkles className="w-4 h-4 mr-2" />
-                Ask AI Assistant
-              </Link>
-            </Button>
           </div>
         </CardContent>
       </Card>

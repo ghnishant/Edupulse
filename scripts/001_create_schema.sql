@@ -324,3 +324,42 @@ CREATE INDEX IF NOT EXISTS idx_analytics_institution ON public.analytics_data(in
 CREATE INDEX IF NOT EXISTS idx_analytics_metric ON public.analytics_data(metric_type);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON public.notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_read ON public.notifications(read);
+
+-- Students: Tracking performance and rosters
+CREATE TABLE IF NOT EXISTS public.students (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  institution_id UUID NOT NULL REFERENCES public.institutions(id) ON DELETE CASCADE,
+  department_id UUID NOT NULL REFERENCES public.departments(id) ON DELETE CASCADE,
+  roll_number TEXT NOT NULL,
+  full_name TEXT NOT NULL,
+  performance_score DECIMAL DEFAULT 0,
+  attendance_rate DECIMAL DEFAULT 85,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(institution_id, roll_number)
+);
+
+ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "students_select_own" ON public.students 
+  FOR SELECT USING (
+    institution_id IN (SELECT institution_id FROM public.profiles WHERE id = auth.uid())
+  );
+
+CREATE POLICY "students_insert_own" ON public.students 
+  FOR INSERT WITH CHECK (
+    institution_id IN (SELECT institution_id FROM public.profiles WHERE id = auth.uid())
+  );
+
+CREATE POLICY "students_update_own" ON public.students 
+  FOR UPDATE USING (
+    institution_id IN (SELECT institution_id FROM public.profiles WHERE id = auth.uid())
+  );
+
+CREATE POLICY "students_delete_own" ON public.students 
+  FOR DELETE USING (
+    institution_id IN (SELECT institution_id FROM public.profiles WHERE id = auth.uid())
+  );
+
+CREATE INDEX IF NOT EXISTS idx_students_institution ON public.students(institution_id);
+CREATE INDEX IF NOT EXISTS idx_students_dept ON public.students(department_id);
+CREATE INDEX IF NOT EXISTS idx_students_roll ON public.students(roll_number);

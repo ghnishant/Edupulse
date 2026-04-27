@@ -26,8 +26,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import { DocumentUploadDialog } from "@/components/dashboard/document-upload-dialog"
+import { toast } from "sonner"
 import {
   Search,
   Upload,
@@ -35,6 +37,7 @@ import {
   FileSpreadsheet,
   File,
   MoreHorizontal,
+  MoreVertical,
   Download,
   Trash2,
   Eye,
@@ -43,61 +46,9 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
+  Loader2,
 } from "lucide-react"
-
-// Mock data - in production this would come from Supabase
-const documents = [
-  {
-    id: "1",
-    name: "Faculty CVs 2024.pdf",
-    type: "pdf",
-    category: "academic",
-    size: "2.4 MB",
-    status: "completed",
-    uploadedBy: "Dr. Priya Sharma",
-    uploadedAt: "2024-01-15T10:30:00Z",
-  },
-  {
-    id: "2",
-    name: "Research Publications.xlsx",
-    type: "xlsx",
-    category: "research",
-    size: "1.8 MB",
-    status: "completed",
-    uploadedBy: "Prof. Amit Kumar",
-    uploadedAt: "2024-01-14T14:20:00Z",
-  },
-  {
-    id: "3",
-    name: "Student Enrollment Data.csv",
-    type: "csv",
-    category: "administrative",
-    size: "856 KB",
-    status: "processing",
-    uploadedBy: "Admin Team",
-    uploadedAt: "2024-01-13T09:15:00Z",
-  },
-  {
-    id: "4",
-    name: "NAAC SSR Document.pdf",
-    type: "pdf",
-    category: "accreditation",
-    size: "5.2 MB",
-    status: "completed",
-    uploadedBy: "Dr. Suresh Reddy",
-    uploadedAt: "2024-01-12T16:45:00Z",
-  },
-  {
-    id: "5",
-    name: "Annual Budget 2024.xlsx",
-    type: "xlsx",
-    category: "financial",
-    size: "1.2 MB",
-    status: "pending",
-    uploadedBy: "Finance Team",
-    uploadedAt: "2024-01-11T11:00:00Z",
-  },
-]
+import { useDocuments } from "@/hooks/use-documents"
 
 const categories = [
   { value: "all", label: "All Categories" },
@@ -174,12 +125,98 @@ export default function DocumentsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [isUploadOpen, setIsUploadOpen] = useState(false)
+  const { documents, stats, loading, refresh } = useDocuments()
 
   const filteredDocuments = documents.filter((doc) => {
     const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesCategory = categoryFilter === "all" || doc.category === categoryFilter
     return matchesSearch && matchesCategory
   })
+
+  const handleView = (doc: any) => {
+    if (!doc.file_url) {
+      toast.error("File URL not found")
+      return
+    }
+    
+    // Ensure we have a full URL
+    let fullUrl = doc.file_url
+    if (!fullUrl.startsWith("http")) {
+      const supabase = createClient()
+      const { data } = supabase.storage.from("documents").getPublicUrl(fullUrl)
+      fullUrl = data.publicUrl
+    }
+    
+    window.open(fullUrl, "_blank")
+  }
+
+  const handleDownload = async (doc: any) => {
+    try {
+      const supabase = createClient()
+      
+      // Extract path if it's a full URL
+      let filePath = doc.file_url
+      if (filePath.includes("storage/v1/object/public/")) {
+        filePath = filePath.split("documents/")[1]
+      }
+
+      const { data, error } = await supabase.storage
+        .from("documents")
+        .download(filePath)
+
+      if (error) throw error
+
+      const url = window.URL.createObjectURL(new Blob([data]))
+      const link = document.createElement("a")
+      link.href = url
+      link.setAttribute("download", doc.name)
+      document.body.appendChild(link)
+      link.click()
+      link.parentNode?.removeChild(link)
+    } catch (err: any) {
+      toast.error(`Failed to download: ${err.message}`)
+    }
+  }
+
+  const handleDelete = async (docId: string, fileUrl: string) => {
+    if (!confirm("Are you sure you want to delete this document?")) return
+
+    try {
+      const supabase = createClient()
+      
+      // Extract path if it's a full URL
+      let filePath = fileUrl
+      if (filePath.includes("storage/v1/object/public/")) {
+        filePath = filePath.split("documents/")[1]
+      }
+
+      const { error: storageError } = await supabase.storage
+        .from("documents")
+        .remove([filePath])
+      
+      if (storageError) console.warn("Storage deletion error:", storageError)
+
+      const { error: dbError } = await supabase
+        .from("documents")
+        .delete()
+        .eq("id", docId)
+
+      if (dbError) throw dbError
+
+      toast.success("Document deleted successfully")
+      refresh()
+    } catch (err: any) {
+      toast.error(`Failed to delete: ${err.message}`)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-[600px]">
+        <Loader2 className="w-12 h-12 animate-spin text-primary" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -216,7 +253,7 @@ export default function DocumentsPage() {
                 <FolderOpen className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-bold">1,284</p>
+                <p className="text-2xl font-bold">{stats.total}</p>
                 <p className="text-xs text-muted-foreground">Total Documents</p>
               </div>
             </div>
@@ -229,7 +266,7 @@ export default function DocumentsPage() {
                 <CheckCircle2 className="w-5 h-5 text-success" />
               </div>
               <div>
-                <p className="text-2xl font-bold">1,156</p>
+                <p className="text-2xl font-bold">{stats.processed}</p>
                 <p className="text-xs text-muted-foreground">Processed</p>
               </div>
             </div>
@@ -242,7 +279,7 @@ export default function DocumentsPage() {
                 <Clock className="w-5 h-5 text-warning" />
               </div>
               <div>
-                <p className="text-2xl font-bold">24</p>
+                <p className="text-2xl font-bold">{stats.processing}</p>
                 <p className="text-xs text-muted-foreground">Processing</p>
               </div>
             </div>
@@ -255,7 +292,7 @@ export default function DocumentsPage() {
                 <FileText className="w-5 h-5 text-info" />
               </div>
               <div>
-                <p className="text-2xl font-bold">4.2 GB</p>
+                <p className="text-2xl font-bold">{stats.storage}</p>
                 <p className="text-xs text-muted-foreground">Storage Used</p>
               </div>
             </div>
@@ -339,21 +376,25 @@ export default function DocumentsPage() {
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="w-4 h-4" />
+                            <Button variant="ghost" size="icon" className="h-8 w-8 p-0">
+                              <MoreVertical className="w-4 h-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
-                              <Eye className="w-4 h-4 mr-2" />
+                          <DropdownMenuContent align="end" className="w-[160px]">
+                            <DropdownMenuItem onClick={() => handleView(doc)}>
+                              <Eye className="mr-2 h-4 w-4" />
                               View
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Download className="w-4 h-4 mr-2" />
+                            <DropdownMenuItem onClick={() => handleDownload(doc)}>
+                              <Download className="mr-2 h-4 w-4" />
                               Download
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive focus:text-destructive">
-                              <Trash2 className="w-4 h-4 mr-2" />
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => handleDelete(doc.id, doc.file_url)}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
                               Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>

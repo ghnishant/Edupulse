@@ -108,18 +108,17 @@ Would you like me to generate a detailed report on any specific metric?`,
 Shall I generate the full SSR document draft?`,
 }
 
+import { useAIChat } from "@/hooks/use-ai-chat"
+
 export default function AIAssistantPage() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      role: "assistant",
-      content: "Hello! I'm your EduPulse AI assistant. I can help you analyze institutional data, generate reports, and provide insights for accreditation. What would you like to know?",
-      timestamp: new Date(),
-    },
-  ])
+  const { messages, isLoading, sendMessage } = useAIChat()
   const [input, setInput] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -131,38 +130,10 @@ export default function AIAssistantPage() {
 
   const handleSend = async (text?: string) => {
     const messageText = text || input
-    if (!messageText.trim()) return
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: messageText,
-      timestamp: new Date(),
-    }
-
-    setMessages((prev) => [...prev, userMessage])
-    setInput("")
-    setIsLoading(true)
-
-    // Simulate AI response
-    setTimeout(() => {
-      let response = mockResponses.default
-      if (messageText.toLowerCase().includes("metric") || messageText.toLowerCase().includes("performance")) {
-        response = mockResponses.metrics
-      } else if (messageText.toLowerCase().includes("naac") || messageText.toLowerCase().includes("criteria")) {
-        response = mockResponses.naac
-      }
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: response,
-        timestamp: new Date(),
-      }
-
-      setMessages((prev) => [...prev, assistantMessage])
-      setIsLoading(false)
-    }, 1500)
+    if (!messageText.trim() || isLoading) return
+    
+    sendMessage(messageText)
+    if (!text) setInput("")
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -223,7 +194,7 @@ export default function AIAssistantPage() {
                         message.role === "user" ? "text-primary-foreground/70" : "text-muted-foreground"
                       }`}
                     >
-                      {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      {mounted && message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </div>
                   </div>
                   {message.role === "user" && (
@@ -327,15 +298,15 @@ export default function AIAssistantPage() {
             <CardTitle className="text-lg">Quick Actions</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Button variant="outline" className="w-full justify-start" size="sm">
+            <Button variant="outline" className="w-full justify-start" size="sm" onClick={() => handleSend("Generate NAAC Report")}>
               <FileText className="w-4 h-4 mr-2" />
               Generate NAAC Report
             </Button>
-            <Button variant="outline" className="w-full justify-start" size="sm">
+            <Button variant="outline" className="w-full justify-start" size="sm" onClick={() => handleSend("What are our key performance metrics?")}>
               <BarChart3 className="w-4 h-4 mr-2" />
               Export Analytics
             </Button>
-            <Button variant="outline" className="w-full justify-start" size="sm">
+            <Button variant="outline" className="w-full justify-start" size="sm" onClick={() => handleSend("How can we improve our research output?")}>
               <Lightbulb className="w-4 h-4 mr-2" />
               Get Recommendations
             </Button>

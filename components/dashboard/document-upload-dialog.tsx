@@ -30,6 +30,8 @@ import {
   Loader2,
   Cloud,
 } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
+import { toast } from "sonner"
 
 interface DocumentUploadDialogProps {
   open: boolean
@@ -95,46 +97,117 @@ export function DocumentUploadDialog({ open, onOpenChange }: DocumentUploadDialo
     }
   }
 
-  const addFiles = (newFiles: File[]) => {
+  const addFiles = async (newFiles: File[]) => {
+    const supabase = createClient()
+    
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      toast.error("Please log in to upload documents")
+      return
+    }
+
+    let { data: profile } = await supabase
+      .from("profiles")
+      .select("institution_id")
+      .eq("id", user.id)
+      .single()
+
+    // If profile is missing, create a default one to stop foreign key errors
+    if (!profile) {
+      const { data: newProfile, error: profileError } = await supabase
+        .from("profiles")
+        .insert({
+          id: user.id,
+          email: user.email,
+          full_name: user.user_metadata?.full_name || user.email,
+          role: 'faculty'
+        })
+        .select("institution_id")
+        .single()
+      
+      if (!profileError) profile = newProfile
+    }
+
+    // Get institution ID (fallback to first available if profile is missing it)
+    let instId = profile?.institution_id
+    if (!instId) {
+      const { data: insts } = await supabase.from("institutions").select("id").limit(1)
+      instId = insts?.[0]?.id
+    }
+
+    const currentFilesCount = files.length
     const uploadFiles: UploadedFile[] = newFiles.map((file) => ({
       file,
       progress: 0,
       status: "uploading",
     }))
+    
     setFiles((prev) => [...prev, ...uploadFiles])
 
-    // Simulate upload progress
-    uploadFiles.forEach((uploadFile, index) => {
-      simulateUpload(files.length + index)
-    })
-  }
+    for (const [index, uploadFile] of uploadFiles.entries()) {
+      const fileIndex = currentFilesCount + index
+      const filePath = `${user.id}/${Date.now()}-${uploadFile.file.name}`
 
-  const simulateUpload = (index: number) => {
-    let progress = 0
-    const interval = setInterval(() => {
-      progress += Math.random() * 20
-      if (progress >= 100) {
-        progress = 100
-        clearInterval(interval)
+      try {
+        // 1. Upload to Storage
+        const { error: storageError } = await supabase.storage
+          .from("documents")
+          .upload(filePath, uploadFile.file)
+
+        if (storageError) throw storageError
+
         setFiles((prev) =>
           prev.map((f, i) =>
-            i === index ? { ...f, progress: 100, status: "processing" } : f
+            i === fileIndex ? { ...f, progress: 100, status: "processing" } : f
           )
         )
-        // Simulate processing
-        setTimeout(() => {
-          setFiles((prev) =>
-            prev.map((f, i) =>
-              i === index ? { ...f, status: "completed" } : f
-            )
-          )
-        }, 1500)
-      } else {
+
+        // 2. Get Public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from("documents")
+          .getPublicUrl(filePath)
+
+        // 3. Insert into Database
+        const { error: dbError } = await supabase.from("documents").insert({
+          name: uploadFile.file.name,
+          file_type: uploadFile.file.name.split(".").pop() || "other",
+          file_url: publicUrl,
+          file_size: uploadFile.file.size,
+          category: category as any,
+          institution_id: instId,
+          user_id: user.id,
+          status: "completed",
+        })
+
+        if (dbError) throw dbError
+
         setFiles((prev) =>
-          prev.map((f, i) => (i === index ? { ...f, progress } : f))
+          prev.map((f, i) =>
+            i === fileIndex ? { ...f, status: "completed" } : f
+          )
         )
+        toast.success(`${uploadFile.file.name} uploaded successfully`)
+      } catch (err: any) {
+        // Deep extraction of error details
+        console.error("FULL ERROR OBJECT:", JSON.stringify(err, null, 2));
+        console.error("ERROR TYPE:", typeof err);
+        
+        const message = err.message || err.error_description || err.error || (typeof err === 'string' ? err : 'Unknown Error');
+        const status = err.status || err.statusCode || 'No Status';
+
+        setFiles((prev) =>
+          prev.map((f, i) =>
+            i === fileIndex ? { ...f, status: "error" } : f
+          )
+        )
+        
+        const errorMsg = message === "Bucket not found" 
+          ? "Bucket 'documents' not found. Check Dashboard -> Storage."
+          : `Upload Failed (${status}): ${message}`
+        toast.error(errorMsg)
       }
-    }, 200)
+    }
   }
 
   const removeFile = (index: number) => {
@@ -259,6 +332,12 @@ export function DocumentUploadDialog({ open, onOpenChange }: DocumentUploadDialo
                           <div className="flex items-center gap-1 text-success">
                             <CheckCircle2 className="w-3 h-3" />
                             <span className="text-xs">Processed</span>
+                          </div>
+                        )}
+                        {uploadFile.status === "error" && (
+                          <div className="flex items-center gap-1 text-destructive">
+                            <X className="w-3 h-3" />
+                            <span className="text-xs">Failed</span>
                           </div>
                         )}
                       </div>

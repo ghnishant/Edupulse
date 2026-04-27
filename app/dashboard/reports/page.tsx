@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -38,55 +38,12 @@ import {
   BarChart3,
   Calendar,
   Sparkles,
+  Loader2,
 } from "lucide-react"
-
-const reports = [
-  {
-    id: "1",
-    title: "NAAC SSR 2024",
-    type: "naac",
-    status: "in_review",
-    progress: 85,
-    lastUpdated: "2024-01-15",
-    author: "Dr. Priya Sharma",
-  },
-  {
-    id: "2",
-    title: "NBA Self Assessment Report - CSE",
-    type: "nba",
-    status: "draft",
-    progress: 60,
-    lastUpdated: "2024-01-14",
-    author: "Prof. Amit Kumar",
-  },
-  {
-    id: "3",
-    title: "Annual Quality Report 2023-24",
-    type: "iqac",
-    status: "approved",
-    progress: 100,
-    lastUpdated: "2024-01-10",
-    author: "IQAC Team",
-  },
-  {
-    id: "4",
-    title: "Departmental Performance Analysis",
-    type: "custom",
-    status: "published",
-    progress: 100,
-    lastUpdated: "2024-01-08",
-    author: "Admin Team",
-  },
-  {
-    id: "5",
-    title: "Research Output Summary Q4",
-    type: "custom",
-    status: "draft",
-    progress: 30,
-    lastUpdated: "2024-01-05",
-    author: "Dr. Suresh Reddy",
-  },
-]
+import { createClient } from "@/lib/supabase/client"
+import { useReports } from "@/hooks/use-reports"
+import { useDashboardStats } from "@/hooks/use-dashboard-stats"
+import { toast } from "sonner"
 
 const reportTypes = [
   { value: "all", label: "All Types" },
@@ -151,15 +108,13 @@ const getStatusBadge = (status: string) => {
           In Review
         </Badge>
       )
-    case "draft":
+    default:
       return (
         <Badge variant="secondary">
           <Clock className="w-3 h-3 mr-1" />
           Draft
         </Badge>
       )
-    default:
-      return null
   }
 }
 
@@ -182,12 +137,87 @@ export default function ReportsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState("naac-ssr")
+  const [newTitle, setNewTitle] = useState("")
+  const [newDescription, setNewDescription] = useState("")
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  const { reports, loading, refresh } = useReports()
+  const stats = useDashboardStats()
+
+  const handleCreateReport = async () => {
+    if (!newTitle.trim()) {
+      toast.error("Please enter a report title")
+      return
+    }
+
+    try {
+      setIsGenerating(true)
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) throw new Error("User not found")
+
+      // Get institution ID
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("institution_id, full_name")
+        .eq("id", user.id)
+        .single()
+
+      let instId = profile?.institution_id
+      if (!instId) {
+        const { data: insts } = await supabase.from("institutions").select("id").limit(1)
+        instId = insts?.[0]?.id
+      }
+
+      // Map template ID to database type enum
+      const typeMapping: Record<string, string> = {
+        "naac-ssr": "naac",
+        "nba-sar": "nba",
+        "aqar": "annual",
+        "custom": "custom"
+      }
+
+      const { error } = await supabase.from("reports").insert({
+        title: newTitle,
+        type: typeMapping[selectedTemplate] || "custom",
+        institution_id: instId,
+        user_id: user.id,
+        status: "draft"
+      })
+
+      if (error) throw error
+
+      toast.success("Report generated successfully")
+      setNewTitle("")
+      setNewDescription("")
+      setIsCreateOpen(false)
+      refresh()
+    } catch (err: any) {
+      toast.error(`Failed to generate report: ${err.message}`)
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const filteredReports = reports.filter((report) => {
     const matchesSearch = report.title.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesType = typeFilter === "all" || report.type === typeFilter
     return matchesSearch && matchesType
   })
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-[600px]">
+        <Loader2 className="w-12 h-12 animate-spin text-primary" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -221,10 +251,17 @@ export default function ReportsPage() {
             <div className="space-y-4 py-4">
               <div className="grid grid-cols-2 gap-3">
                 {templates.map((template) => (
-                  <button
+                   <button
                     key={template.id}
-                    onClick={() => setIsCreateOpen(false)}
-                    className="p-4 rounded-lg border border-border hover:border-primary/50 hover:bg-muted/30 transition-all text-left group"
+                    onClick={() => {
+                      setSelectedTemplate(template.id)
+                      if (!newTitle) setNewTitle(`${template.name} Report`)
+                    }}
+                    className={`p-4 rounded-lg border-2 transition-all text-left group ${
+                      selectedTemplate === template.id 
+                        ? "border-primary bg-primary/5 shadow-sm" 
+                        : "border-border hover:border-primary/50 hover:bg-muted/30"
+                    }`}
                   >
                     <div className={`p-2 rounded-lg ${template.color} w-fit mb-3`}>
                       <template.icon className="w-5 h-5" />
@@ -241,11 +278,20 @@ export default function ReportsPage() {
               <div className="pt-4 border-t border-border space-y-4">
                 <div className="space-y-2">
                   <Label>Report Title</Label>
-                  <Input placeholder="Enter report title" />
+                  <Input 
+                    placeholder="Enter report title" 
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Description (Optional)</Label>
-                  <Textarea placeholder="Brief description of the report" rows={3} />
+                  <Textarea 
+                    placeholder="Brief description of the report" 
+                    rows={3} 
+                    value={newDescription}
+                    onChange={(e) => setNewDescription(e.target.value)}
+                  />
                 </div>
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
                   <Sparkles className="w-5 h-5 text-primary" />
@@ -259,8 +305,16 @@ export default function ReportsPage() {
               <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
                 Cancel
               </Button>
-              <Button className="gradient-primary text-primary-foreground">
-                <Sparkles className="w-4 h-4 mr-2" />
+              <Button 
+                className="gradient-primary text-primary-foreground"
+                onClick={handleCreateReport}
+                disabled={isGenerating}
+              >
+                {isGenerating ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Sparkles className="w-4 h-4 mr-2" />
+                )}
                 Generate Report
               </Button>
             </div>
@@ -282,7 +336,7 @@ export default function ReportsPage() {
                 <FileText className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-bold">24</p>
+                <p className="text-2xl font-bold">{reports.length}</p>
                 <p className="text-xs text-muted-foreground">Total Reports</p>
               </div>
             </div>
@@ -295,7 +349,7 @@ export default function ReportsPage() {
                 <CheckCircle2 className="w-5 h-5 text-success" />
               </div>
               <div>
-                <p className="text-2xl font-bold">18</p>
+                <p className="text-2xl font-bold">{reports.filter(r => r.status === 'published' || r.status === 'approved').length}</p>
                 <p className="text-xs text-muted-foreground">Published</p>
               </div>
             </div>
@@ -308,7 +362,7 @@ export default function ReportsPage() {
                 <Clock className="w-5 h-5 text-warning" />
               </div>
               <div>
-                <p className="text-2xl font-bold">4</p>
+                <p className="text-2xl font-bold">{reports.filter(r => r.status === 'in_review').length}</p>
                 <p className="text-xs text-muted-foreground">In Review</p>
               </div>
             </div>
@@ -321,7 +375,7 @@ export default function ReportsPage() {
                 <Award className="w-5 h-5 text-info" />
               </div>
               <div>
-                <p className="text-2xl font-bold">3.42</p>
+                <p className="text-2xl font-bold">{stats.naacScore}</p>
                 <p className="text-xs text-muted-foreground">NAAC Score</p>
               </div>
             </div>
@@ -381,7 +435,7 @@ export default function ReportsPage() {
                       </div>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <span>{report.author}</span>
-                        <span>Updated {report.lastUpdated}</span>
+                        <span>Updated {mounted && report.lastUpdated}</span>
                       </div>
                       {report.progress < 100 && (
                         <div className="mt-3 flex items-center gap-3">
@@ -393,11 +447,17 @@ export default function ReportsPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" onClick={() => toast.info(`Viewing ${report.title}`)}>
                         <Eye className="w-4 h-4 mr-1" />
                         View
                       </Button>
-                      <Button variant="outline" size="sm">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          toast.success(`Exporting ${report.title} as PDF...`)
+                        }}
+                      >
                         <Download className="w-4 h-4 mr-1" />
                         Export
                       </Button>

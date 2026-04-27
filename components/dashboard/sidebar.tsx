@@ -21,6 +21,7 @@ import {
   MessageSquare,
   Building,
   Bell,
+  Briefcase,
 } from "lucide-react"
 import type { User } from "@supabase/supabase-js"
 
@@ -38,6 +39,8 @@ interface DashboardSidebarProps {
 
 const mainNavItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { href: "/dashboard/students", label: "Students", icon: Users },
+  { href: "/dashboard/placements", label: "Placements", icon: Briefcase },
   { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/dashboard/documents", label: "Documents", icon: FolderOpen },
   { href: "/dashboard/reports", label: "Reports", icon: FileText },

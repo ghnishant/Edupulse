@@ -2,62 +2,83 @@
 
 import { motion } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
-import { TrendingUp, TrendingDown, Users, GraduationCap, BookOpen, Award, FileText, Building } from "lucide-react"
-
-const kpis = [
-  {
-    label: "Total Students",
-    value: "5,120",
-    change: "+12%",
-    trend: "up",
-    icon: Users,
-    color: "bg-primary/10 text-primary",
-  },
-  {
-    label: "Faculty Members",
-    value: "240",
-    change: "+8%",
-    trend: "up",
-    icon: GraduationCap,
-    color: "bg-accent/10 text-accent",
-  },
-  {
-    label: "Research Papers",
-    value: "156",
-    change: "+23%",
-    trend: "up",
-    icon: BookOpen,
-    color: "bg-success/10 text-success",
-  },
-  {
-    label: "NAAC Score",
-    value: "3.42",
-    change: "+0.15",
-    trend: "up",
-    icon: Award,
-    color: "bg-warning/10 text-warning",
-  },
-  {
-    label: "Documents",
-    value: "1,284",
-    change: "+34%",
-    trend: "up",
-    icon: FileText,
-    color: "bg-info/10 text-info",
-  },
-  {
-    label: "Departments",
-    value: "12",
-    change: "0",
-    trend: "neutral",
-    icon: Building,
-    color: "bg-muted text-muted-foreground",
-  },
-]
+import { TrendingUp, TrendingDown, Users, GraduationCap, BookOpen, Award, FileText, Building, Loader2 } from "lucide-react"
+import { useDashboardStats } from "@/hooks/use-dashboard-stats"
 
 export function KPICards() {
+  const { 
+    totalColleges,
+    totalStudents, 
+    institutionScore,
+    bestCollege,
+    lowestCollege,
+    placementRate,
+    passPercentage,
+    attendanceRate,
+    loading 
+  } = useDashboardStats()
+
+  const kpis = [
+    {
+      label: "Total Colleges",
+      value: totalColleges.toLocaleString(),
+      icon: Building,
+      color: "bg-primary/10 text-primary",
+    },
+    {
+      label: "Total Students",
+      value: totalStudents.toLocaleString(),
+      icon: Users,
+      color: "bg-accent/10 text-accent",
+    },
+    {
+      label: "Institution Score",
+      value: `${institutionScore}/100`,
+      icon: Award,
+      color: "bg-warning/10 text-warning",
+    },
+    {
+      label: "Best College",
+      value: bestCollege,
+      icon: GraduationCap,
+      color: "bg-success/10 text-success",
+    },
+    {
+      label: "Lowest College",
+      value: lowestCollege,
+      icon: TrendingDown,
+      color: "bg-destructive/10 text-destructive",
+    },
+    {
+      label: "Placement Rate",
+      value: `${placementRate}%`,
+      icon: TrendingUp,
+      color: "bg-info/10 text-info",
+    },
+    {
+      label: "Pass Percentage",
+      value: `${passPercentage}%`,
+      icon: FileText,
+      color: "bg-success/10 text-success",
+    },
+    {
+      label: "Attendance Rate",
+      value: `${attendanceRate}%`,
+      icon: BookOpen,
+      color: "bg-primary/10 text-primary",
+    },
+  ]
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 min-h-[140px] items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto col-span-full" />
+      </div>
+    )
+  }
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {kpis.map((kpi, index) => (
         <motion.div
           key={kpi.label}
@@ -65,27 +86,15 @@ export function KPICards() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: index * 0.05 }}
         >
-          <Card className="glass hover:shadow-lg transition-shadow">
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-start justify-between mb-2">
-                <div className={`p-2 rounded-lg ${kpi.color}`}>
-                  <kpi.icon className="w-4 h-4" />
-                </div>
-                {kpi.trend !== "neutral" && (
-                  <div className={`flex items-center gap-0.5 text-xs font-medium ${
-                    kpi.trend === "up" ? "text-success" : "text-destructive"
-                  }`}>
-                    {kpi.trend === "up" ? (
-                      <TrendingUp className="w-3 h-3" />
-                    ) : (
-                      <TrendingDown className="w-3 h-3" />
-                    )}
-                    <span>{kpi.change}</span>
-                  </div>
-                )}
+          <Card className="glass hover:shadow-lg transition-shadow h-full">
+            <CardContent className="p-4 flex flex-col justify-between h-full">
+              <div className={`p-2 rounded-lg ${kpi.color} w-fit mb-4`}>
+                <kpi.icon className="w-5 h-5" />
               </div>
-              <p className="text-2xl font-bold">{kpi.value}</p>
-              <p className="text-xs text-muted-foreground mt-1">{kpi.label}</p>
+              <div>
+                <p className="text-xl font-bold truncate">{kpi.value}</p>
+                <p className="text-xs text-muted-foreground mt-1">{kpi.label}</p>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
