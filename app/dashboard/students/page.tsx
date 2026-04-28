@@ -44,8 +44,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
 
 export default function StudentsPage() {
+  const [currentPage, setCurrentPage] = useState(1)
+  const ITEMS_PER_PAGE = 10
   const [students, setStudents] = useState<any[]>([])
   const [depts, setDepts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,50 +71,44 @@ export default function StudentsPage() {
 
   useEffect(() => {
     async function init() {
-      await ensureContext()
-      fetchStudents()
-      fetchDepts()
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setLoading(false); return }
+      
+      const { data: profile } = await supabase.from("profiles").select("institution_id, full_name, role").eq("id", user.id).single()
+      
+      let instId = profile?.institution_id
+      if (!instId) {
+        const { data: newInst } = await supabase.from("institutions").insert({
+          name: `${profile?.full_name || 'Faculty'}'s College`,
+          code: `IF-${user.id.slice(0, 5).toUpperCase()}`,
+          type: 'college',
+          location: "Main Campus"
+        }).select().single()
+        
+        if (newInst) {
+          instId = newInst.id
+          await supabase.from("profiles").update({ institution_id: instId }).eq("id", user.id)
+        }
+      }
+
+      await Promise.all([
+        fetchStudents(instId, profile?.role),
+        fetchDepts(instId)
+      ])
+      setLoading(false)
     }
     init()
   }, [])
 
-  async function ensureContext() {
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const { data: profile } = await supabase.from("profiles").select("institution_id, full_name").eq("id", user.id).single()
-    if (!profile?.institution_id) {
-      // ALWAYS create a fresh college for a new faculty member to ensure separation
-      const { data: newInst } = await supabase.from("institutions").insert({
-        name: `${profile?.full_name || 'Faculty'}'s College`,
-        code: `IF-${user.id.slice(0, 5).toUpperCase()}`,
-        type: 'college',
-        location: "Main Campus"
-      }).select().single()
-      
-      if (newInst) {
-        await supabase.from("profiles").update({ institution_id: newInst.id }).eq("id", user.id)
-      }
-    }
-  }
-
-  async function fetchStudents() {
+  async function fetchStudents(instId: string, role: string) {
     try {
       const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: profile } = await supabase.from("profiles").select("institution_id, role").eq("id", user.id).single()
-      const isAdmin = profile?.role === "super_admin" || profile?.role === "institution_admin"
-      const instId = profile?.institution_id
+      const isAdmin = role === "super_admin" || role === "institution_admin"
       if (!instId) {
         console.warn("No institution ID found for this user")
-        setLoading(false)
         return
       }
-
-      console.log("FETCHING FOR:", isAdmin ? "ALL COLLEGES (Admin)" : instId)
 
       let query = supabase.from("students").select("*, institutions(name), departments(name)").order("performance_score", { ascending: false })
       if (!isAdmin) {
@@ -115,21 +119,17 @@ export default function StudentsPage() {
       if (!error && data) setStudents(data)
     } catch (err) {
       console.error(err)
-    } finally {
-      setLoading(false)
     }
   }
 
-  async function fetchDepts() {
+  async function fetchDepts(instId: string) {
     try {
       const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      const { data: profile } = await supabase.from("profiles").select("institution_id").eq("id", user.id).single()
       
       const { data } = await supabase
         .from("departments")
         .select("id, name")
-        .eq("institution_id", profile?.institution_id)
+        .eq("institution_id", instId)
       
       if (data && data.length > 0) {
         setDepts(data)
@@ -278,6 +278,16 @@ export default function StudentsPage() {
   const filteredStudents = students.filter(student => 
     student.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     student.roll_number?.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery])
+
+  const totalPages = Math.ceil(filteredStudents.length / ITEMS_PER_PAGE)
+  const paginatedStudents = filteredStudents.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
   )
 
   if (loading) {
@@ -469,7 +479,7 @@ export default function StudentsPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredStudents.map((student) => (
+                paginatedStudents.map((student) => (
                   <TableRow key={student.id}>
                     <TableCell className="font-mono text-sm">{student.roll_number}</TableCell>
                     <TableCell className="font-medium">{student.full_name}</TableCell>
@@ -496,6 +506,40 @@ export default function StudentsPage() {
               )}
             </TableBody>
           </Table>
+
+          {totalPages > 1 && (
+            <div className="mt-4">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious 
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                  
+                  {Array.from({ length: totalPages }).map((_, i) => (
+                    <PaginationItem key={i}>
+                      <PaginationLink 
+                        isActive={currentPage === i + 1}
+                        onClick={() => setCurrentPage(i + 1)}
+                        className="cursor-pointer"
+                      >
+                        {i + 1}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ))}
+                  
+                  <PaginationItem>
+                    <PaginationNext 
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
