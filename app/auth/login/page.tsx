@@ -81,6 +81,10 @@ export default function LoginPage() {
                 </div>
               )}
 
+              <div className="p-3 mb-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 text-xs break-all">
+                URL: {process.env.NEXT_PUBLIC_SUPABASE_URL || "UNDEFINED"}
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <div className="relative">
